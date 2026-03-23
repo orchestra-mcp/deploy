@@ -134,6 +134,13 @@ db.orchestra-mcp.dev {
 		}
 	}
 
+	# Supabase MCP endpoint (no basic auth — uses its own service key auth)
+	handle /mcp {
+		reverse_proxy supabase-studio:3000 {
+			import proxy-headers
+		}
+	}
+
 	# All other routes require basic auth (Studio dashboard)
 	handle {
 		basicauth {
