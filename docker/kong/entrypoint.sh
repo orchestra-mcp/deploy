@@ -23,4 +23,4 @@ sed \
 echo "Kong config generated from template (keys substituted)"
 
 # Hand off to the official Kong entrypoint
-exec /docker-entrypoint.sh kong docker-start
+exec /entrypoint.sh kong docker-start
