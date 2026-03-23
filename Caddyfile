@@ -15,6 +15,11 @@
 	# Use Cloudflare DNS-01 for all ACME challenges (wildcard-compatible)
 	acme_dns cloudflare {env.CF_API_TOKEN}
 
+	# Trust Cloudflare proxy IPs for real client IP forwarding
+	servers {
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+	}
+
 	# Structured JSON logs for production log aggregation
 	log default {
 		output file /var/log/caddy/caddy.log {
@@ -46,33 +51,6 @@
 	}
 }
 
-# Trust Cloudflare proxy IPs for real client IP forwarding
-(cloudflare-proxies) {
-	trusted_proxies static \
-		173.245.48.0/20 \
-		103.21.244.0/22 \
-		103.22.200.0/22 \
-		103.31.4.0/22 \
-		141.101.64.0/18 \
-		108.162.192.0/18 \
-		190.93.240.0/20 \
-		188.114.96.0/20 \
-		197.234.240.0/22 \
-		198.41.128.0/17 \
-		162.158.0.0/15 \
-		104.16.0.0/13 \
-		104.24.0.0/14 \
-		172.64.0.0/13 \
-		131.0.72.0/22 \
-		2400:cb00::/32 \
-		2606:4700::/32 \
-		2803:f800::/32 \
-		2405:b500::/32 \
-		2405:8100::/32 \
-		2a06:98c0::/29 \
-		2c0f:f248::/32
-}
-
 # Standard proxy headers for upstream services
 (proxy-headers) {
 	header_up X-Real-IP {remote_host}
@@ -85,7 +63,7 @@
 orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
-	import cloudflare-proxies
+
 
 	encode gzip zstd
 
@@ -118,7 +96,7 @@ orchestra-mcp.dev {
 db.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
-	import cloudflare-proxies
+
 
 	# Studio is protected with basic auth (Supabase dashboard credentials)
 	basicauth {
@@ -143,7 +121,7 @@ db.orchestra-mcp.dev {
 auth.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
-	import cloudflare-proxies
+
 
 	reverse_proxy supabase-auth:9999 {
 		import proxy-headers
@@ -163,7 +141,7 @@ auth.orchestra-mcp.dev {
 rest.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
-	import cloudflare-proxies
+
 
 	# Route through Kong so it handles authentication and ACL policies
 	reverse_proxy supabase-kong:8000 {
@@ -184,7 +162,7 @@ rest.orchestra-mcp.dev {
 realtime.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
-	import cloudflare-proxies
+
 
 	# flush_interval -1 disables response buffering for WebSocket/SSE streaming
 	reverse_proxy supabase-realtime:4000 {
@@ -206,7 +184,7 @@ realtime.orchestra-mcp.dev {
 storage.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
-	import cloudflare-proxies
+
 
 	reverse_proxy supabase-storage:5000 {
 		import proxy-headers
@@ -226,7 +204,7 @@ storage.orchestra-mcp.dev {
 edge.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
-	import cloudflare-proxies
+
 
 	reverse_proxy supabase-edge:8081 {
 		import proxy-headers
@@ -246,7 +224,7 @@ edge.orchestra-mcp.dev {
 mcp.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
-	import cloudflare-proxies
+
 
 	# CORS for Claude Desktop and web origins
 	@cors_preflight method OPTIONS
@@ -289,7 +267,7 @@ mcp.orchestra-mcp.dev {
 api.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
-	import cloudflare-proxies
+
 
 	encode gzip zstd
 
