@@ -120,6 +120,11 @@ db.orchestra-mcp.dev {
 	import security-headers
 	import cloudflare-proxies
 
+	# Studio is protected with basic auth (Supabase dashboard credentials)
+	basicauth {
+		{env.DASHBOARD_USERNAME} {env.DASHBOARD_PASSWORD_HASH}
+	}
+
 	reverse_proxy supabase-studio:3000 {
 		import proxy-headers
 	}

@@ -289,6 +289,9 @@ services:
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
       DEFAULT_ORGANIZATION_NAME: Orchestra
       DEFAULT_PROJECT_NAME: orchestra-mcp
+      # Studio auth credentials (basic auth at Caddy level + Studio internal)
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-supabase}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/profile', (r) => { process.exit(r.statusCode < 500 ? 0 : 1) })"]
       interval: 15s
