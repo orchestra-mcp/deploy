@@ -53,6 +53,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/roles.sql:/docker-entrypoint-initdb.d/00-roles.sql:ro
       - ./migrations:/docker-entrypoint-initdb.d/migrations:ro
       - ./docker/postgres/run-migrations.sh:/docker-entrypoint-initdb.d/99-run-migrations.sh:ro
     healthcheck:
