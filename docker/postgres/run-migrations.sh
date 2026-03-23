@@ -53,7 +53,6 @@ GRANT service_role TO authenticator;
 GRANT supabase_admin TO authenticator;
 ALTER ROLE authenticator LOGIN;
 
-RAISE NOTICE 'All roles created and grants applied';
 EOSQL
 
 echo "=== Roles created ==="
