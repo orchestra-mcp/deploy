@@ -382,24 +382,9 @@ update_domain() {
     fi
 }
 
-# ─── Step 7: GHCR login ────────────────────────────────────────────────────
-
-ghcr_login() {
-    if ! docker pull ghcr.io/orchestra-mcp/gateway:latest &>/dev/null; then
-        warn "Cannot pull ghcr.io images. Logging in to GitHub Container Registry..."
-        info "Create a PAT with read:packages at: https://github.com/settings/tokens/new"
-        prompt "GitHub username:" gh_user
-        prompt_secret "GitHub PAT (read:packages):" gh_token
-        echo "$gh_token" | docker login ghcr.io -u "$gh_user" --password-stdin
-        log "GHCR login successful."
-    fi
-}
-
-# ─── Step 8: Deploy ─────────────────────────────────────────────────────────
+# ─── Step 7: Deploy ─────────────────────────────────────────────────────────
 
 deploy() {
-    ghcr_login
-
     log "Pulling Docker images (this may take a few minutes)..."
     cd "$INSTALL_DIR"
     docker compose pull

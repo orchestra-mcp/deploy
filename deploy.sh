@@ -328,30 +328,6 @@ if [ ! -f .env ]; then
     create_env_interactive
 fi
 
-# ── GHCR login (needed for private orchestra-mcp images) ──────────────────
-ghcr_login() {
-    if docker config inspect ghcr.io &>/dev/null 2>&1 || grep -q "ghcr.io" ~/.docker/config.json 2>/dev/null; then
-        return 0  # already logged in
-    fi
-
-    # Check if any ghcr.io images are used
-    if grep -q "ghcr.io/" docker-compose.yml 2>/dev/null; then
-        if ! docker pull ghcr.io/orchestra-mcp/gateway:latest &>/dev/null; then
-            warn "Cannot pull ghcr.io images. Logging in to GitHub Container Registry..."
-            info "Create a PAT with read:packages at: https://github.com/settings/tokens/new"
-            ask "GitHub username:"
-            read -r gh_user
-            ask "GitHub PAT (read:packages):"
-            read -rs gh_token
-            echo ""
-            echo "$gh_token" | docker login ghcr.io -u "$gh_user" --password-stdin
-            log "GHCR login successful."
-        fi
-    fi
-}
-
-ghcr_login
-
 case "${1:-}" in
     --pull-only)
         log "Pulling latest images..."
