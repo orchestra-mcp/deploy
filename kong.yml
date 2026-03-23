@@ -9,6 +9,8 @@
 #   - anon: Uses ANON_KEY, can access public endpoints
 #   - service_role: Uses SERVICE_ROLE_KEY, can access all endpoints
 #
+# CORS is handled by Caddy (db.orchestra-mcp.dev block), not Kong.
+#
 # Mount path: /var/lib/kong/kong.yml
 # =============================================================================
 
@@ -51,8 +53,6 @@ services:
         strip_path: true
         paths:
           - /auth/v1/verify
-    plugins:
-      - name: cors
 
   - name: auth-v1-open-callback
     url: http://supabase-auth:9999/callback
@@ -61,8 +61,6 @@ services:
         strip_path: true
         paths:
           - /auth/v1/callback
-    plugins:
-      - name: cors
 
   - name: auth-v1-open-authorize
     url: http://supabase-auth:9999/authorize
@@ -71,8 +69,6 @@ services:
         strip_path: true
         paths:
           - /auth/v1/authorize
-    plugins:
-      - name: cors
 
   - name: auth-v1
     url: http://supabase-auth:9999
@@ -82,7 +78,6 @@ services:
         paths:
           - /auth/v1/
     plugins:
-      - name: cors
       - name: key-auth
         config:
           hide_credentials: false
@@ -103,7 +98,6 @@ services:
         paths:
           - /rest/v1/
     plugins:
-      - name: cors
       - name: key-auth
         config:
           hide_credentials: false
@@ -124,7 +118,6 @@ services:
         paths:
           - /graphql/v1
     plugins:
-      - name: cors
       - name: key-auth
         config:
           hide_credentials: false
@@ -145,34 +138,12 @@ services:
         paths:
           - /realtime/v1/
     plugins:
-      - name: cors
       - name: key-auth
         config:
           hide_credentials: false
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - anon
-            - admin
-
-  - name: realtime-v1-ws
-    url: http://supabase-realtime:4000/socket/
-    routes:
-      - name: realtime-v1-ws
-        strip_path: true
-        paths:
-          - /realtime/v1/
-        protocols:
-          - http
-          - https
-          - ws
-          - wss
-    plugins:
-      - name: cors
-      - name: key-auth
-        config:
-          hide_credentials: false
+          key_names:
+            - apikey
+            - Authorization
       - name: acl
         config:
           hide_groups_header: true
@@ -190,7 +161,6 @@ services:
         paths:
           - /storage/v1/
     plugins:
-      - name: cors
       - name: key-auth
         config:
           hide_credentials: false
@@ -210,8 +180,6 @@ services:
         strip_path: true
         paths:
           - /storage/v1/s3/
-    plugins:
-      - name: cors
 
   - name: storage-v1-object-public
     url: http://supabase-storage:5000/object/public/
@@ -220,8 +188,6 @@ services:
         strip_path: true
         paths:
           - /object/public/
-    plugins:
-      - name: cors
 
   # ── Postgres Meta (Admin) ────────────────────────────────────────────────
 
@@ -255,7 +221,6 @@ services:
         paths:
           - /mcp
     plugins:
-      - name: cors
       - name: key-auth
         config:
           hide_credentials: false
