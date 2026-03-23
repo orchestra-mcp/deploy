@@ -531,31 +531,9 @@ services:
       start_period: 15s
 
   # ── Orchestra: Next.js (Frontend) ────────────────────────────────────────
-  # When deploying standalone, use a pre-built image:
-  #   nextjs:
-  #     image: ghcr.io/orchestra-mcp/web:latest
-
-  nextjs:
-    image: ${NEXTJS_IMAGE:-caddy:2.11.2-alpine}
-    container_name: orchestra-nextjs
-    restart: unless-stopped
-    networks: [orchestra]
-    depends_on:
-      supabase-kong:
-        condition: service_healthy
-      gateway:
-        condition: service_healthy
-    command: ["caddy", "respond", "--listen", ":3000", "--body", "Orchestra MCP - coming soon", "--status", "200"]
-    environment:
-      NEXT_PUBLIC_SUPABASE_URL: https://rest.orchestra-mcp.dev
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
-      NEXT_PUBLIC_GATEWAY_URL: https://api.orchestra-mcp.dev
-      NEXT_PUBLIC_MCP_URL: https://mcp.orchestra-mcp.dev
-      NEXT_PUBLIC_AUTH_URL: https://auth.orchestra-mcp.dev
-      NEXT_PUBLIC_REALTIME_URL: https://realtime.orchestra-mcp.dev
-      NEXT_PUBLIC_STORAGE_URL: https://storage.orchestra-mcp.dev
-      NODE_ENV: production
-      PORT: 3000
+  # Next.js runs on the host via PM2 (deployed by .github/workflows/deploy.yml
+  # in orchestra-mcp/next). Caddy proxies to host:3000 via extra_hosts below.
+  # No Docker container needed — Caddy reaches the host process directly.
 
   # ── Caddy (Reverse Proxy + TLS) ──────────────────────────────────────────
 
@@ -574,6 +552,8 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       supabase-kong:
         condition: service_healthy
@@ -589,8 +569,6 @@ services:
         condition: service_started
       gateway:
         condition: service_healthy
-      nextjs:
-        condition: service_started
     environment:
       CF_API_TOKEN: ${CF_API_TOKEN}
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-orchestra}
