@@ -97,14 +97,22 @@ db.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
 
-
-	# Studio is protected with basic auth (Supabase dashboard credentials)
-	basicauth {
-		{env.DASHBOARD_USERNAME} {env.DASHBOARD_PASSWORD_HASH}
+	# Allow favicon/manifest without auth (browsers always request these)
+	@favicon path /favicon/* /favicon.ico /favicon/manifest.json
+	handle @favicon {
+		reverse_proxy supabase-studio:3000 {
+			import proxy-headers
+		}
 	}
 
-	reverse_proxy supabase-studio:3000 {
-		import proxy-headers
+	# All other routes require basic auth
+	handle {
+		basicauth {
+			{env.DASHBOARD_USERNAME} {env.DASHBOARD_PASSWORD_HASH}
+		}
+		reverse_proxy supabase-studio:3000 {
+			import proxy-headers
+		}
 	}
 
 	log {

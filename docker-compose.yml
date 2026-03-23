@@ -302,9 +302,15 @@ services:
       PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
       AUTH_JWT_SECRET: ${JWT_SECRET}
       EDGE_RUNTIME_ENDPOINT: http://supabase-edge:9999
+      # Edge functions management (Studio reads function list from this volume)
+      EDGE_FUNCTIONS_MANAGEMENT_FOLDER: /app/edge-functions
+      SNIPPETS_MANAGEMENT_FOLDER: /app/snippets
       # Studio auth credentials (basic auth at Caddy level + Studio internal)
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-supabase}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+    volumes:
+      - ./supabase/snippets:/app/snippets
+      - ./supabase/functions:/app/edge-functions:ro
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/profile', (r) => { process.exit(r.statusCode < 500 ? 0 : 1) })"]
       interval: 15s
