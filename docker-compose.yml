@@ -135,7 +135,7 @@ services:
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
     command: postgrest
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h supabase-db -U postgres || exit 1"]
+      test: ["CMD", "postgrest", "--ready"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -161,6 +161,7 @@ services:
       DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
       DB_ENC_KEY: ${REALTIME_DB_ENC_KEY:-supabaserealtime}
       API_JWT_SECRET: ${JWT_SECRET}
+      METRICS_JWT_SECRET: ${JWT_SECRET}
       FLY_ALLOC_ID: fly123
       FLY_APP_NAME: realtime
       SECRET_KEY_BASE: ${REALTIME_SECRET_KEY_BASE}
@@ -264,8 +265,13 @@ services:
       KONG_PLUGINS: request-transformer,cors,key-auth,acl
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
       KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      # Keys passed as env vars — used by entrypoint to envsubst kong.yml
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
     volumes:
-      - ./kong.yml:/var/lib/kong/kong.yml:ro
+      - ./kong.yml:/var/lib/kong/kong.yml.template:ro
+      - ./docker/kong/entrypoint.sh:/usr/local/bin/kong-entrypoint.sh:ro
+    entrypoint: /usr/local/bin/kong-entrypoint.sh
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 10s
@@ -292,7 +298,7 @@ services:
       STUDIO_DEFAULT_PROJECT: orchestra-mcp
       STUDIO_PG_META_URL: http://supabase-meta:8080
       SUPABASE_URL: http://supabase-kong:8000
-      SUPABASE_PUBLIC_URL: https://orchestra-mcp.dev
+      SUPABASE_PUBLIC_URL: https://db.orchestra-mcp.dev
       NEXT_PUBLIC_ENABLE_LOGS: "true"
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
@@ -453,10 +459,11 @@ services:
       LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_API_KEY}
     command: ["--config", "/etc/vector/vector.yml"]
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9001/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 15s
 
   # ── ClickHouse (Analytics) ────────────────────────────────────────────────
 
@@ -589,8 +596,8 @@ services:
       CLICKHOUSE_ADMIN_USER: ${CLICKHOUSE_ADMIN_USER:-admin}
       CLICKHOUSE_ADMIN_HASH: ${CLICKHOUSE_ADMIN_HASH}
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:80"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 30s

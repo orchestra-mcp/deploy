@@ -105,7 +105,36 @@ db.orchestra-mcp.dev {
 		}
 	}
 
-	# All other routes require basic auth
+	# Supabase API routes proxied through Kong (no basic auth — uses apikey header)
+	# Studio generates these URLs based on SUPABASE_PUBLIC_URL
+	handle /rest/v1/* {
+		reverse_proxy supabase-kong:8000 {
+			import proxy-headers
+		}
+	}
+	handle /auth/v1/* {
+		reverse_proxy supabase-kong:8000 {
+			import proxy-headers
+		}
+	}
+	handle /realtime/v1/* {
+		reverse_proxy supabase-kong:8000 {
+			import proxy-headers
+			flush_interval -1
+		}
+	}
+	handle /storage/v1/* {
+		reverse_proxy supabase-kong:8000 {
+			import proxy-headers
+		}
+	}
+	handle /pg/* {
+		reverse_proxy supabase-kong:8000 {
+			import proxy-headers
+		}
+	}
+
+	# All other routes require basic auth (Studio dashboard)
 	handle {
 		basicauth {
 			{env.DASHBOARD_USERNAME} {env.DASHBOARD_PASSWORD_HASH}
