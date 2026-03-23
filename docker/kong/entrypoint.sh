@@ -6,7 +6,8 @@
 set -e
 
 TEMPLATE="/var/lib/kong/kong.yml.template"
-OUTPUT="/var/lib/kong/kong.yml"
+OUTPUT="/tmp/kong.yml"
+export KONG_DECLARATIVE_CONFIG="$OUTPUT"
 
 if [ ! -f "$TEMPLATE" ]; then
     echo "ERROR: Kong config template not found at $TEMPLATE"
