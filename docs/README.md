@@ -18,7 +18,7 @@ Step-by-step instructions to deploy the full Orchestra MCP platform on a fresh s
 SSH into your server and run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/orchestra-mcp/deploy/master/setup-server.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/orchestra-mcp/deploy/master/setup-server.sh | sudo bash
 ```
 
 The script will:

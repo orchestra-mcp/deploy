@@ -3,7 +3,7 @@
 # Orchestra MCP — One-Command Server Setup
 #
 # Run on a fresh Ubuntu 22.04+ server:
-#   curl -fsSL https://raw.githubusercontent.com/orchestra-mcp/deploy/master/setup-server.sh | sudo sh
+#   curl -fsSL https://raw.githubusercontent.com/orchestra-mcp/deploy/master/setup-server.sh | sudo bash
 #
 # Installs Docker, clones the deploy repo, generates all secrets,
 # configures interactively, and deploys the full stack.
@@ -429,7 +429,7 @@ main() {
     # Check root
     if [ "$(id -u)" -ne 0 ]; then
         err "This script must be run as root (sudo)."
-        err "Usage: curl -fsSL https://raw.githubusercontent.com/orchestra-mcp/deploy/master/setup-server.sh | sudo sh"
+        err "Usage: curl -fsSL https://raw.githubusercontent.com/orchestra-mcp/deploy/master/setup-server.sh | sudo bash"
         exit 1
     fi
 

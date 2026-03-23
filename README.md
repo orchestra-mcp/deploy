@@ -5,7 +5,7 @@ Single command to deploy the entire Orchestra MCP platform.
 ## One-Command Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/orchestra-mcp/deploy/master/setup-server.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/orchestra-mcp/deploy/master/setup-server.sh | sudo bash
 ```
 
 This will:
