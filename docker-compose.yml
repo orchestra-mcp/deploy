@@ -283,6 +283,8 @@ services:
         condition: service_healthy
       supabase-meta:
         condition: service_started
+      supabase-analytics:
+        condition: service_healthy
     environment:
       STUDIO_DEFAULT_ORGANIZATION: Orchestra
       STUDIO_DEFAULT_PROJECT: orchestra-mcp
@@ -305,6 +307,10 @@ services:
       # Edge functions management (Studio reads function list from this volume)
       EDGE_FUNCTIONS_MANAGEMENT_FOLDER: /app/edge-functions
       SNIPPETS_MANAGEMENT_FOLDER: /app/snippets
+      # Analytics (Logflare) — enables Logs Explorer in Studio
+      LOGFLARE_API_KEY: ${LOGFLARE_API_KEY}
+      LOGFLARE_URL: http://supabase-analytics:4000
+      NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
       # Studio auth credentials (basic auth at Caddy level + Studio internal)
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-supabase}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
@@ -389,6 +395,62 @@ services:
       ERL_AFLAGS: "-proto_dist inet_tcp"
     healthcheck:
       test: ["CMD", "curl", "-sSf", "http://localhost:4000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── Supabase: Analytics (Logflare) ────────────────────────────────────────
+  # Required for Studio Logs Explorer. Ingests structured logs from Vector.
+
+  supabase-analytics:
+    image: supabase/logflare:1.31.2
+    container_name: orchestra-supabase-analytics
+    restart: unless-stopped
+    networks: [orchestra]
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      LOGFLARE_NODE_HOST: 127.0.0.1
+      DB_USERNAME: supabase_admin
+      DB_DATABASE: _supabase
+      DB_HOSTNAME: db
+      DB_PORT: 5432
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_SCHEMA: _analytics
+      LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_API_KEY}
+      LOGFLARE_PRIVATE_ACCESS_TOKEN: ${LOGFLARE_API_KEY}
+      LOGFLARE_SINGLE_TENANT: "true"
+      LOGFLARE_SUPABASE_MODE: "true"
+      LOGFLARE_FEATURE_FLAG_OVERRIDE: multibackend=true
+      POSTGRES_BACKEND_URL: postgresql://supabase_admin:${POSTGRES_PASSWORD}@db:5432/_supabase
+      POSTGRES_BACKEND_SCHEMA: _analytics
+    healthcheck:
+      test: ["CMD", "curl", "-sSf", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Vector (Log Collection Pipeline) ────────────────────────────────────
+  # Collects Docker container logs and routes them to Logflare analytics.
+
+  vector:
+    image: timberio/vector:0.53.0-alpine
+    container_name: orchestra-vector
+    restart: unless-stopped
+    networks: [orchestra]
+    depends_on:
+      supabase-analytics:
+        condition: service_healthy
+    volumes:
+      - ./vector/vector.yml:/etc/vector/vector.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_API_KEY}
+    command: ["--config", "/etc/vector/vector.yml"]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
       interval: 10s
       timeout: 5s
       retries: 3
