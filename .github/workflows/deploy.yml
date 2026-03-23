@@ -1,0 +1,77 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Specific service to restart (blank = all)'
+        required: false
+        type: string
+
+env:
+  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+  DEPLOY_PATH: /opt/orchestra
+
+jobs:
+  deploy:
+    name: Deploy via SSH
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: production
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Sync deploy files to server
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='*.log' \
+            ./ ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/
+
+      - name: Pull latest images
+        run: |
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} "cd ${DEPLOY_PATH} && docker compose pull"
+
+      - name: Deploy (all services)
+        if: ${{ github.event.inputs.service == '' }}
+        run: |
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} "cd ${DEPLOY_PATH} && docker compose up -d --remove-orphans"
+
+      - name: Deploy (specific service)
+        if: ${{ github.event.inputs.service != '' }}
+        run: |
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} "cd ${DEPLOY_PATH} && docker compose up -d ${{ github.event.inputs.service }}"
+
+      - name: Wait for health checks
+        run: |
+          sleep 15
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} "cd ${DEPLOY_PATH} && docker compose ps --format 'table {{.Name}}\t{{.Status}}'"
+
+      - name: Verify services
+        run: |
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} "cd ${DEPLOY_PATH} && docker compose ps --format json" | \
+            python3 -c "
+          import json, sys
+          services = [json.loads(line) for line in sys.stdin if line.strip()]
+          unhealthy = [s['Name'] for s in services if 'unhealthy' in s.get('Status', '').lower()]
+          if unhealthy:
+              print(f'::error::Unhealthy services: {unhealthy}')
+              sys.exit(1)
+          print(f'All {len(services)} services running.')
+          "
+
+      - name: Cleanup old images
+        run: |
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} "docker image prune -f --filter 'until=168h'"

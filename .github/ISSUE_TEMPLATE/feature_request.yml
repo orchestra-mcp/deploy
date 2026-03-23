@@ -1,0 +1,40 @@
+name: Feature Request
+description: Suggest an improvement to the deployment stack
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature. Please describe what you'd like.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What do you want to add or change?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this needed? What problem does it solve?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Docker Compose configuration
+        - Caddy / TLS / routing
+        - PostgreSQL / migrations
+        - Supabase services
+        - ClickHouse / analytics
+        - CI/CD pipeline
+        - Monitoring / alerting
+        - Documentation
+        - Other
+    validations:
+      required: true

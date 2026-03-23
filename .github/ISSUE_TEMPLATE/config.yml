@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/orchestra-mcp/deploy/blob/main/docs/README.md
+    about: Read the deployment guide
+  - name: Sponsor
+    url: https://github.com/sponsors/fadymondy
+    about: Support Orchestra MCP development

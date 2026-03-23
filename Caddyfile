@@ -1,0 +1,344 @@
+# Orchestra MCP Platform — Production Caddyfile
+#
+# Domain: orchestra-mcp.dev (all subdomains)
+# Requires: caddy built with github.com/caddy-dns/cloudflare (via xcaddy)
+# Requires: CF_API_TOKEN environment variable set for Cloudflare DNS-01 challenge
+#
+# Usage:
+#   caddy run --config Caddyfile
+#   caddy reload --config Caddyfile
+#   caddy validate --config Caddyfile
+
+# ─── Global Options ──────────────────────────────────────────────────────────
+
+{
+	# Use Cloudflare DNS-01 for all ACME challenges (wildcard-compatible)
+	acme_dns cloudflare {env.CF_API_TOKEN}
+
+	# Structured JSON logs for production log aggregation
+	log default {
+		output file /var/log/caddy/caddy.log {
+			roll_size 100mb
+			roll_keep 10
+		}
+		format json
+		level INFO
+	}
+}
+
+# ─── Reusable Snippets ──────────────────────────────────────────────────────
+
+# TLS via Cloudflare DNS-01 challenge (required for wildcard certs behind Cloudflare proxy)
+(cloudflare-tls) {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+}
+
+# Security headers applied to all sites
+(security-headers) {
+	header {
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-XSS-Protection "0"
+		-Server
+	}
+}
+
+# Trust Cloudflare proxy IPs for real client IP forwarding
+(cloudflare-proxies) {
+	trusted_proxies static \
+		173.245.48.0/20 \
+		103.21.244.0/22 \
+		103.22.200.0/22 \
+		103.31.4.0/22 \
+		141.101.64.0/18 \
+		108.162.192.0/18 \
+		190.93.240.0/20 \
+		188.114.96.0/20 \
+		197.234.240.0/22 \
+		198.41.128.0/17 \
+		162.158.0.0/15 \
+		104.16.0.0/13 \
+		104.24.0.0/14 \
+		172.64.0.0/13 \
+		131.0.72.0/22 \
+		2400:cb00::/32 \
+		2606:4700::/32 \
+		2803:f800::/32 \
+		2405:b500::/32 \
+		2405:8100::/32 \
+		2a06:98c0::/29 \
+		2c0f:f248::/32
+}
+
+# Standard proxy headers for upstream services
+(proxy-headers) {
+	header_up X-Real-IP {remote_host}
+	header_up X-Forwarded-For {remote_host}
+	header_up X-Forwarded-Proto {scheme}
+}
+
+# ─── 1. Root Domain — Next.js Profile Platform ──────────────────────────────
+
+orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+	import cloudflare-proxies
+
+	encode gzip zstd
+
+	# Next.js static assets — immutable cache (content-hashed filenames)
+	handle /_next/static/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		reverse_proxy nextjs:3000 {
+			import proxy-headers
+		}
+	}
+
+	# All other Next.js routes (SSR, API routes, etc.)
+	handle {
+		reverse_proxy nextjs:3000 {
+			import proxy-headers
+		}
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-root.log {
+			roll_size 100mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# ─── 2. Supabase Studio ─────────────────────────────────────────────────────
+
+db.orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+	import cloudflare-proxies
+
+	reverse_proxy supabase-studio:3000 {
+		import proxy-headers
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-db.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# ─── 3. GoTrue Auth ─────────────────────────────────────────────────────────
+
+auth.orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+	import cloudflare-proxies
+
+	reverse_proxy supabase-auth:9999 {
+		import proxy-headers
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-auth.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# ─── 4. PostgREST via Kong ──────────────────────────────────────────────────
+
+rest.orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+	import cloudflare-proxies
+
+	# Route through Kong so it handles authentication and ACL policies
+	reverse_proxy supabase-kong:8000 {
+		import proxy-headers
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-rest.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# ─── 5. Supabase Realtime ───────────────────────────────────────────────────
+
+realtime.orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+	import cloudflare-proxies
+
+	# flush_interval -1 disables response buffering for WebSocket/SSE streaming
+	reverse_proxy supabase-realtime:4000 {
+		import proxy-headers
+		flush_interval -1
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-realtime.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# ─── 6. Supabase Storage ────────────────────────────────────────────────────
+
+storage.orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+	import cloudflare-proxies
+
+	reverse_proxy supabase-storage:5000 {
+		import proxy-headers
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-storage.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# ─── 7. Edge Runtime ────────────────────────────────────────────────────────
+
+edge.orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+	import cloudflare-proxies
+
+	reverse_proxy supabase-edge:8081 {
+		import proxy-headers
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-edge.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# ─── 8. MCP Cloud Gateway (Streamable HTTP Transport) ───────────────────────
+
+mcp.orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+	import cloudflare-proxies
+
+	# CORS for Claude Desktop and web origins
+	@cors_preflight method OPTIONS
+	handle @cors_preflight {
+		header Access-Control-Allow-Origin "{header.Origin}"
+		header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		header Access-Control-Allow-Headers "Content-Type, Authorization, Mcp-Session-Id"
+		header Access-Control-Expose-Headers "Mcp-Session-Id"
+		header Access-Control-Max-Age "86400"
+		respond "" 204
+	}
+
+	header {
+		Access-Control-Allow-Origin "{header.Origin}"
+		Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type, Authorization, Mcp-Session-Id"
+		Access-Control-Expose-Headers "Mcp-Session-Id"
+	}
+
+	# POST /mcp — JSON-RPC requests
+	# GET /mcp — SSE stream for server-to-client notifications
+	# flush_interval -1 is required for SSE streaming
+	reverse_proxy gateway:8080 {
+		import proxy-headers
+		flush_interval -1
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-mcp.log {
+			roll_size 100mb
+			roll_keep 10
+		}
+		format json
+	}
+}
+
+# ─── 9. API Gateway ─────────────────────────────────────────────────────────
+
+api.orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+	import cloudflare-proxies
+
+	encode gzip zstd
+
+	# Tunnel reverse connections — long-lived WebSocket, no buffering
+	handle /tunnels/reverse {
+		reverse_proxy gateway:8080 {
+			import proxy-headers
+			flush_interval -1
+		}
+	}
+
+	# Tunnel WebSocket connections — pattern: /tunnels/{id}/ws
+	handle /tunnels/*/ws {
+		reverse_proxy gateway:8080 {
+			import proxy-headers
+			flush_interval -1
+		}
+	}
+
+	# All other API routes — standard buffered proxy
+	handle {
+		reverse_proxy gateway:8080 {
+			import proxy-headers
+		}
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-api.log {
+			roll_size 100mb
+			roll_keep 10
+		}
+		format json
+	}
+}
+
+# ─── 10. ClickHouse Analytics (Admin-Only, Protected) ────────────────────────
+
+analytics.orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+
+	# Basic auth protection — only admins should access ClickHouse HTTP interface
+	basicauth {
+		{env.CLICKHOUSE_ADMIN_USER} {env.CLICKHOUSE_ADMIN_HASH}
+	}
+
+	reverse_proxy clickhouse:8123 {
+		import proxy-headers
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-analytics.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format json
+	}
+}

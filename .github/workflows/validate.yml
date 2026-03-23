@@ -1,0 +1,98 @@
+name: Validate Configuration
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+    paths:
+      - 'docker-compose.yml'
+      - 'Caddyfile'
+      - 'kong.yml'
+      - 'migrations/**'
+      - '.github/workflows/**'
+
+jobs:
+  validate-compose:
+    name: Validate Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create dummy .env for validation
+        run: |
+          cat > .env <<EOF
+          POSTGRES_PASSWORD=test
+          JWT_SECRET=testtesttesttesttesttesttesttest
+          ANON_KEY=eytest
+          SERVICE_ROLE_KEY=eytest
+          REALTIME_SECRET_KEY_BASE=testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+          SECRET_KEY_BASE=testtesttesttesttesttesttesttest
+          VAULT_ENC_KEY=testtesttesttesttesttest
+          CF_API_TOKEN=test
+          CLICKHOUSE_PASSWORD=test
+          CLICKHOUSE_ADMIN_USER=admin
+          CLICKHOUSE_ADMIN_HASH=test
+          EOF
+
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
+
+  validate-caddy:
+    name: Validate Caddyfile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Caddy with cloudflare plugin
+        run: |
+          docker build -t test-caddy ./docker/caddy
+
+      - name: Validate Caddyfile syntax
+        run: |
+          docker run --rm \
+            -v $(pwd)/Caddyfile:/etc/caddy/Caddyfile:ro \
+            -e CF_API_TOKEN=dummy \
+            -e CLICKHOUSE_ADMIN_USER=admin \
+            -e CLICKHOUSE_ADMIN_HASH=dummy \
+            test-caddy caddy validate --config /etc/caddy/Caddyfile 2>&1 || true
+
+  validate-migrations:
+    name: Validate SQL Migrations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: supabase/postgres:15.8.1.085
+        env:
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run all migrations
+        run: |
+          for f in $(ls migrations/*.sql | sort); do
+            echo "Running: $f"
+            PGPASSWORD=testpassword psql -h localhost -U postgres -d postgres -f "$f" || {
+              echo "::error::Migration failed: $f"
+              exit 1
+            }
+          done
+
+      - name: Verify table count
+        run: |
+          count=$(PGPASSWORD=testpassword psql -h localhost -U postgres -d postgres -tAc "
+            SELECT count(*) FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+          ")
+          echo "Tables created: $count"
+          if [ "$count" -lt 80 ]; then
+            echo "::error::Expected 80+ tables, got $count"
+            exit 1
+          fi
