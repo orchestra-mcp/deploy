@@ -31,20 +31,20 @@ docker compose up -d
 ```
                         Caddy (TLS + routing)
                                │
-      ┌────────────┬───────────┼───────────┬──────────────┐
-      │            │           │           │              │
-orchestra-     api.        mcp.      *.orchestra-mcp.dev
- mcp.dev       │            │         Supabase services:
-(Next.js)      │            │          ├── db.       (Studio + basicauth)
-               │            │          ├── auth.     (GoTrue)
-         ┌─────┴──────┐ ┌───┴────┐   ├── rest.     (PostgREST)
-         │ Go Gateway  │ │Cloud   │   ├── realtime. (Realtime)
-         │ -Tunnels    │ │MCP     │   ├── storage.  (Storage)
-         │ -Actions    │ │-SSE    │   └── edge.     (Edge Functions)
-         │ -Health     │ │-100+   │
-         └─────────────┘ │tools   │
-                └────────┴────────┘
-                same Go binary
+      ┌────────────┬───────────┼──────────────────────────┐
+      │            │           │                          │
+orchestra-   api. + mcp.    *.orchestra-mcp.dev
+ mcp.dev       │              Supabase services:
+(Next.js)      │               ├── db.       (Studio + basicauth)
+               │               ├── auth.     (GoTrue)
+         ┌─────┴──────────┐   ├── rest.     (PostgREST via Kong)
+         │  Go Gateway     │   ├── realtime. (Realtime)
+         │  (unified)      │   ├── storage.  (Storage)
+         │  -REST API      │   └── edge.     (Edge Functions)
+         │  -Tunnels       │
+         │  -MCP (SSE)     │
+         │  -100+ tools    │
+         └─────────────────┘
 ```
 
 ## Services (16 containers)
@@ -64,7 +64,7 @@ orchestra-     api.        mcp.      *.orchestra-mcp.dev
 | Supavisor | supabase/supavisor:2.7.4 | — (internal) | — |
 | ClickHouse | clickhouse/clickhouse-server:25.3 | analytics. | **Basic auth** (CLICKHOUSE_ADMIN_USER) |
 | Supabase MCP | supabase/mcp:latest | — (internal) | — |
-| Gateway | orchestra-mcp/gateway | api. + mcp. | JWT |
+| Gateway | orchestra-mcp/gateway | api. + mcp. (unified) | JWT |
 | Next.js | orchestra-mcp/web | orchestra-mcp.dev | Public |
 | Caddy | custom (xcaddy+cloudflare) | — (edge) | — |
 
@@ -120,8 +120,9 @@ deploy/
     ├── FUNDING.yml
     ├── ISSUE_TEMPLATE/
     └── workflows/
-        ├── deploy.yml       # Manual SSH deploy (workflow_dispatch)
-        └── validate.yml     # CI: validate compose + caddy + migrations
+        ├── build-gateway.yml # Build + push gateway image on apps/gateway/** changes
+        ├── deploy.yml        # Manual SSH deploy (workflow_dispatch)
+        └── validate.yml      # CI: validate compose + caddy + migrations
 ```
 
 ## Security

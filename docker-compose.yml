@@ -9,7 +9,7 @@
 #
 # Architecture:
 #   Caddy (reverse proxy + TLS) -> Kong (API gateway) -> Supabase services
-#                                -> Gateway (Go API)
+#                                -> Gateway (Go API + MCP)
 #                                -> Next.js (frontend)
 # =============================================================================
 
@@ -316,26 +316,15 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       SUPABASE_DB_URL: postgres://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB:-postgres}
       VERIFY_JWT: "true"
+      # Edge function secrets
+      MCP_JWT_SECRET: ${MCP_JWT_SECRET:-}
+      BMAC_WEBHOOK_SECRET: ${BMAC_WEBHOOK_SECRET:-}
     volumes:
       - ./supabase/functions:/home/deno/functions:ro
     command: start --main-service /home/deno/functions/main
 
-  # ── Supabase: MCP Server (IDE database access) ───────────────────────────
-
-  supabase-mcp:
-    image: supabase/mcp:latest
-    container_name: orchestra-supabase-mcp
-    restart: unless-stopped
-    networks: [orchestra]
-    depends_on:
-      supabase-db:
-        condition: service_healthy
-    environment:
-      SUPABASE_URL: http://supabase-kong:8000
-      SUPABASE_ANON_KEY: ${ANON_KEY}
-      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
-      SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
-      JWT_SECRET: ${JWT_SECRET}
+  # NOTE: Supabase MCP Server (@supabase/mcp) runs as a local Node.js process,
+  # not as a Docker container. Install with: npx @supabase/mcp@latest
 
   # ── imgproxy (Storage image transformations) ──────────────────────────────
 
@@ -413,9 +402,10 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Orchestra: Gateway (Go API) ──────────────────────────────────────────
-  # Build context points to the gateway app in the main repo.
-  # When deploying standalone, use a pre-built image instead:
+  # ── Orchestra: Gateway (Unified Go API + MCP) ───────────────────────────
+  # Source: apps/gateway/ — handles both api. and mcp. subdomains.
+  # Serves REST API, WebSocket tunnels, and Streamable HTTP MCP transport.
+  # When deploying standalone, use a pre-built image:
   #   gateway:
   #     image: ghcr.io/orchestra-mcp/gateway:latest
 
@@ -429,12 +419,17 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB:-postgres}?sslmode=disable
-      SUPABASE_JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
       SUPABASE_URL: http://supabase-kong:8000
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://orchestra-mcp.dev,https://mcp.orchestra-mcp.dev}
+      WEB_API_BASE_URL: ${WEB_API_BASE_URL:-https://api.orchestra-mcp.dev}
+      UPLOAD_DIR: /data/uploads
       PORT: 8080
       ENVIRONMENT: production
+    volumes:
+      - storage_data:/data/uploads
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
       interval: 10s
@@ -448,7 +443,7 @@ services:
   #     image: ghcr.io/orchestra-mcp/web:latest
 
   nextjs:
-    image: ${NEXTJS_IMAGE:-ghcr.io/orchestra-mcp/web:latest}
+    image: ${NEXTJS_IMAGE:-caddy:2.9-alpine}
     container_name: orchestra-nextjs
     restart: unless-stopped
     networks: [orchestra]
@@ -457,6 +452,7 @@ services:
         condition: service_healthy
       gateway:
         condition: service_healthy
+    command: caddy respond --listen :3000 "Orchestra MCP — coming soon" 200
     environment:
       NEXT_PUBLIC_SUPABASE_URL: https://rest.orchestra-mcp.dev
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
@@ -467,12 +463,6 @@ services:
       NEXT_PUBLIC_STORAGE_URL: https://storage.orchestra-mcp.dev
       NODE_ENV: production
       PORT: 3000
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
   # ── Caddy (Reverse Proxy + TLS) ──────────────────────────────────────────
 

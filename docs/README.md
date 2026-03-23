@@ -140,8 +140,8 @@ The wildcard `*` covers all subdomains:
 | `realtime.orchestra-mcp.dev` | Supabase Realtime (WebSocket) | JWT |
 | `storage.orchestra-mcp.dev` | Supabase Storage (file uploads) | JWT |
 | `edge.orchestra-mcp.dev` | Edge Runtime (Deno functions) | JWT |
-| `mcp.orchestra-mcp.dev` | Cloud MCP (Streamable HTTP + SSE) | JWT |
-| `api.orchestra-mcp.dev` | Go Gateway (tunnels, actions, health) | JWT |
+| `mcp.orchestra-mcp.dev` | Gateway — MCP transport (Streamable HTTP + SSE) | JWT |
+| `api.orchestra-mcp.dev` | Gateway — REST API (tunnels, actions, health) | JWT |
 | `analytics.orchestra-mcp.dev` | ClickHouse analytics | Basic auth (CLICKHOUSE_ADMIN) |
 
 > **Note:** The wildcard record must be **DNS only** (grey cloud) for Caddy to obtain the TLS certificate via DNS-01 challenge. The root domain can be **Proxied** (orange cloud).
@@ -201,7 +201,8 @@ docker compose up -d --force-recreate
 
 ## Gateway & Next.js Images
 
-The deploy uses pre-built Docker images for Orchestra services:
+The deploy uses pre-built Docker images for Orchestra services. The **gateway** is a unified Go binary
+(source: `apps/gateway/`) that handles both the REST API (`api.`) and MCP transport (`mcp.`) subdomains:
 
 ```yaml
 gateway:

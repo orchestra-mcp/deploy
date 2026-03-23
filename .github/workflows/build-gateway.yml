@@ -1,0 +1,32 @@
+name: Build Gateway Image
+
+on:
+  push:
+    paths: ['apps/gateway/**']
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Push Gateway
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/gateway
+          push: true
+          tags: ghcr.io/orchestra-mcp/gateway:latest

@@ -241,7 +241,7 @@ edge.orchestra-mcp.dev {
 	}
 }
 
-# ─── 8. MCP Cloud Gateway (Streamable HTTP Transport) ───────────────────────
+# ─── 8. MCP Gateway (Streamable HTTP Transport) ─────────────────────────────
 
 mcp.orchestra-mcp.dev {
 	import cloudflare-tls
@@ -266,6 +266,7 @@ mcp.orchestra-mcp.dev {
 		Access-Control-Expose-Headers "Mcp-Session-Id"
 	}
 
+	# Same gateway binary as api. — unified in apps/gateway/
 	# POST /mcp — JSON-RPC requests
 	# GET /mcp — SSE stream for server-to-client notifications
 	# flush_interval -1 is required for SSE streaming
