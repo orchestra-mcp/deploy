@@ -87,8 +87,8 @@ services:
       GOTRUE_API_PORT: 9999
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB:-postgres}
-      GOTRUE_SITE_URL: https://orchestra-mcp.dev
-      GOTRUE_URI_ALLOW_LIST: ${GOTRUE_URI_ALLOW_LIST:-https://orchestra-mcp.dev/auth/callback}
+      GOTRUE_SITE_URL: https://orchestra-mcp.dev/auth/callback
+      GOTRUE_URI_ALLOW_LIST: ${GOTRUE_URI_ALLOW_LIST:-https://orchestra-mcp.dev/**}
       GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
@@ -556,9 +556,7 @@ services:
     environment:
       MONGODB_URI: mongodb://growthbook-mongo:27017/growthbook
       APP_ORIGIN: https://flags.orchestra-mcp.dev
-      # API_HOST must match APP_ORIGIN so session cookies work (same-origin).
-      # External SDKs use flags-api.orchestra-mcp.dev directly.
-      API_HOST: https://flags.orchestra-mcp.dev
+      API_HOST: https://flags-api.orchestra-mcp.dev
       NODE_ENV: production
       # Secret key for JWT signing — generate a strong random value
       JWT_SECRET: ${GROWTHBOOK_JWT_SECRET}
