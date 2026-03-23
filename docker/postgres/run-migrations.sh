@@ -63,6 +63,12 @@ GRANT anon TO supabase_auth_admin;
 GRANT authenticated TO supabase_auth_admin;
 GRANT service_role TO supabase_auth_admin;
 
+-- Read-only user for MCP server (Studio serves MCP at /api/mcp)
+GRANT USAGE ON SCHEMA public TO supabase_read_only_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO supabase_read_only_user;
+GRANT USAGE ON SCHEMA auth TO supabase_read_only_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA auth TO supabase_read_only_user;
+
 EOSQL
 
 echo "=== Roles created ==="
@@ -75,6 +81,7 @@ ALTER USER authenticator WITH PASSWORD :'pgpass';
 ALTER USER supabase_auth_admin WITH PASSWORD :'pgpass';
 ALTER USER supabase_storage_admin WITH PASSWORD :'pgpass';
 ALTER USER supabase_functions_admin WITH PASSWORD :'pgpass';
+ALTER USER supabase_read_only_user WITH PASSWORD :'pgpass';
 ALTER USER pgbouncer WITH PASSWORD :'pgpass';
 ALTER USER postgres WITH PASSWORD :'pgpass';
 EOSQL
