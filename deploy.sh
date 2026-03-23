@@ -216,6 +216,25 @@ console.log(header+'.'+payload+'.'+sig);
     studio_hash=$(docker run --rm caddy:2.9-alpine caddy hash-password --plaintext "${DASHBOARD_PASSWORD}" 2>/dev/null || echo 'GENERATE_WITH: docker run --rm caddy:2.9-alpine caddy hash-password --plaintext "YOUR_PASSWORD"')
     ch_admin_hash=$(docker run --rm caddy:2.9-alpine caddy hash-password --plaintext "${CLICKHOUSE_PASSWORD}" 2>/dev/null || echo 'GENERATE_ME')
 
+    # ── Escape $ in values for Docker Compose ────────────────────────
+    # Docker Compose interprets $VAR in .env files. JWTs often contain $
+    # characters which must be escaped as $$ to be treated as literals.
+    escape_dollars() { echo "$1" | sed 's/\$/\$\$/g'; }
+
+    ANON_KEY=$(escape_dollars "$ANON_KEY")
+    SERVICE_ROLE_KEY=$(escape_dollars "$SERVICE_ROLE_KEY")
+    JWT_SECRET=$(escape_dollars "$JWT_SECRET")
+    POSTGRES_PASSWORD=$(escape_dollars "$POSTGRES_PASSWORD")
+    REALTIME_SECRET_KEY_BASE=$(escape_dollars "$REALTIME_SECRET_KEY_BASE")
+    SECRET_KEY_BASE=$(escape_dollars "$SECRET_KEY_BASE")
+    VAULT_ENC_KEY=$(escape_dollars "$VAULT_ENC_KEY")
+    REALTIME_DB_ENC_KEY=$(escape_dollars "$REALTIME_DB_ENC_KEY")
+    CLICKHOUSE_PASSWORD=$(escape_dollars "$CLICKHOUSE_PASSWORD")
+    DASHBOARD_PASSWORD=$(escape_dollars "$DASHBOARD_PASSWORD")
+    studio_hash=$(escape_dollars "$studio_hash")
+    ch_admin_hash=$(escape_dollars "$ch_admin_hash")
+    MCP_JWT_SECRET=$(escape_dollars "$MCP_JWT_SECRET")
+
     # ── Write .env ────────────────────────────────────────────────────
     log "Writing .env file..."
 
@@ -308,6 +327,30 @@ ENVEOF
 if [ ! -f .env ]; then
     create_env_interactive
 fi
+
+# ── GHCR login (needed for private orchestra-mcp images) ──────────────────
+ghcr_login() {
+    if docker config inspect ghcr.io &>/dev/null 2>&1 || grep -q "ghcr.io" ~/.docker/config.json 2>/dev/null; then
+        return 0  # already logged in
+    fi
+
+    # Check if any ghcr.io images are used
+    if grep -q "ghcr.io/" docker-compose.yml 2>/dev/null; then
+        if ! docker pull ghcr.io/orchestra-mcp/gateway:latest &>/dev/null; then
+            warn "Cannot pull ghcr.io images. Logging in to GitHub Container Registry..."
+            info "Create a PAT with read:packages at: https://github.com/settings/tokens/new"
+            ask "GitHub username:"
+            read -r gh_user
+            ask "GitHub PAT (read:packages):"
+            read -rs gh_token
+            echo ""
+            echo "$gh_token" | docker login ghcr.io -u "$gh_user" --password-stdin
+            log "GHCR login successful."
+        fi
+    fi
+}
+
+ghcr_login
 
 case "${1:-}" in
     --pull-only)
