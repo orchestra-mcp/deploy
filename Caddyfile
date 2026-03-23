@@ -134,9 +134,9 @@ db.orchestra-mcp.dev {
 		}
 	}
 
-	# Supabase MCP endpoint (no basic auth — uses its own service key auth)
+	# Supabase MCP endpoint (routed through Kong — requires service_role apikey)
 	handle /mcp {
-		reverse_proxy supabase-studio:3000 {
+		reverse_proxy supabase-kong:8000 {
 			import proxy-headers
 		}
 	}

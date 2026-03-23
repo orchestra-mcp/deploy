@@ -239,3 +239,26 @@ services:
           hide_groups_header: true
           allow:
             - admin
+
+  # ── MCP Server (Model Context Protocol) ─────────────────────────────────
+  # Serves Studio's built-in MCP endpoint for AI coding assistants.
+  # Protected by service_role key auth (admin ACL) instead of IP restriction
+  # so it can be accessed remotely through Caddy.
+
+  - name: mcp
+    url: http://supabase-studio:3000/api/mcp
+    routes:
+      - name: mcp
+        strip_path: true
+        paths:
+          - /mcp
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
