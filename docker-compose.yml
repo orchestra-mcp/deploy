@@ -556,9 +556,9 @@ services:
     environment:
       MONGODB_URI: mongodb://growthbook-mongo:27017/growthbook
       APP_ORIGIN: https://flags.orchestra-mcp.dev
-      # API_HOST must equal APP_ORIGIN. Caddy routes /auth/* and /api/* to
-      # Express (port 3100) and everything else to Next.js (port 3000).
-      API_HOST: https://flags.orchestra-mcp.dev
+      # API_HOST includes /api so browser calls become /api/user, /api/organization etc.
+      # Caddy routes /api/* → Express (port 3100), /auth/* → Express, rest → Next.js.
+      API_HOST: https://flags.orchestra-mcp.dev/api
       NODE_ENV: production
       # Secret key for JWT signing — generate a strong random value
       JWT_SECRET: ${GROWTHBOOK_JWT_SECRET}
