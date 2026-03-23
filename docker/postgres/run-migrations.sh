@@ -46,12 +46,22 @@ DO $$ BEGIN CREATE ROLE supabase_replication_admin LOGIN REPLICATION; RAISE NOTI
 DO $$ BEGIN CREATE ROLE supabase_read_only_user LOGIN BYPASSRLS; RAISE NOTICE 'Created role: supabase_read_only_user'; EXCEPTION WHEN duplicate_object THEN RAISE NOTICE 'Role supabase_read_only_user already exists'; END $$;
 DO $$ BEGIN CREATE ROLE postgres SUPERUSER LOGIN REPLICATION BYPASSRLS; RAISE NOTICE 'Created role: postgres'; EXCEPTION WHEN duplicate_object THEN RAISE NOTICE 'Role postgres already exists'; END $$;
 
--- Role grants
+-- Role grants (authenticator switches roles based on JWT)
 GRANT anon TO authenticator;
 GRANT authenticated TO authenticator;
 GRANT service_role TO authenticator;
 GRANT supabase_admin TO authenticator;
 ALTER ROLE authenticator LOGIN;
+
+-- Storage admin needs SET ROLE to service_role/anon/authenticated for RLS
+GRANT anon TO supabase_storage_admin;
+GRANT authenticated TO supabase_storage_admin;
+GRANT service_role TO supabase_storage_admin;
+
+-- Auth admin needs SET ROLE for internal auth operations
+GRANT anon TO supabase_auth_admin;
+GRANT authenticated TO supabase_auth_admin;
+GRANT service_role TO supabase_auth_admin;
 
 EOSQL
 

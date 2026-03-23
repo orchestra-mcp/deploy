@@ -133,9 +133,10 @@ services:
       PGRST_DB_USE_LEGACY_GUCS: "false"
       PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+      PGRST_ADMIN_SERVER_PORT: 3001
     command: postgrest
     healthcheck:
-      test: ["CMD", "postgrest", "--ready"]
+      test: ["CMD-SHELL", "postgrest --ready"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -162,6 +163,7 @@ services:
       DB_ENC_KEY: ${REALTIME_DB_ENC_KEY:-supabaserealtime}
       API_JWT_SECRET: ${JWT_SECRET}
       METRICS_JWT_SECRET: ${JWT_SECRET}
+      APP_NAME: realtime
       FLY_ALLOC_ID: fly123
       FLY_APP_NAME: realtime
       SECRET_KEY_BASE: ${REALTIME_SECRET_KEY_BASE}
@@ -543,7 +545,7 @@ services:
         condition: service_healthy
       gateway:
         condition: service_healthy
-    command: caddy respond --listen :3000 "Orchestra MCP — coming soon" 200
+    command: ["caddy", "respond", "--listen", ":3000", "--body", "Orchestra MCP - coming soon", "--status", "200"]
     environment:
       NEXT_PUBLIC_SUPABASE_URL: https://rest.orchestra-mcp.dev
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
