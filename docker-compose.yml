@@ -317,6 +317,8 @@ services:
       SNIPPETS_MANAGEMENT_FOLDER: /app/snippets
       # Analytics (Logflare) — enables Logs Explorer in Studio
       LOGFLARE_API_KEY: ${LOGFLARE_API_KEY}
+      LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_API_KEY}
+      LOGFLARE_PRIVATE_ACCESS_TOKEN: ${LOGFLARE_API_KEY}
       LOGFLARE_URL: http://supabase-analytics:4000
       NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
       # Studio auth credentials (basic auth at Caddy level + Studio internal)
