@@ -386,28 +386,22 @@ flags.orchestra-mcp.dev {
 
 	# Express backend routes — all non-UI paths go to port 3100
 	# Matches: /user, /auth/*, /api/* (except /api/init), /api/v1/*, etc.
-	# /api/init → Next.js (public config endpoint, no auth needed)
+	# /api/init → Next.js (public config, no auth)
 	handle /api/init {
 		reverse_proxy growthbook:3000 {
 			import proxy-headers
 		}
 	}
 
-	# /api/* → Express backend (Express handles /api/user, /api/organization, etc. natively)
+	# /api/* → Express, strip /api prefix (Express routes: /user, /auth/*, /organization, etc.)
 	handle /api/* {
+		uri strip_prefix /api
 		reverse_proxy growthbook:3100 {
 			import proxy-headers
 		}
 	}
 
-	# /auth/* → Express directly (login, logout, refresh)
-	handle /auth/* {
-		reverse_proxy growthbook:3100 {
-			import proxy-headers
-		}
-	}
-
-	# Everything else → Next.js UI (pages, static assets)
+	# Everything else → Next.js UI
 	handle {
 		reverse_proxy growthbook:3000 {
 			import proxy-headers
