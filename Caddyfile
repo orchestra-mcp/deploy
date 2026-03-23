@@ -358,7 +358,14 @@ flags.orchestra-mcp.dev {
 
 	encode gzip zstd
 
-	# Express API backend — auth sessions + all API routes (admin + SDK)
+	# /api/init is a Next.js route — must go to port 3000 (unauthenticated config)
+	handle /api/init {
+		reverse_proxy growthbook:3000 {
+			import proxy-headers
+		}
+	}
+
+	# All other /api/* and /auth/* → Express backend (port 3100)
 	handle /auth/* {
 		reverse_proxy growthbook:3100 {
 			import proxy-headers
@@ -371,7 +378,7 @@ flags.orchestra-mcp.dev {
 		}
 	}
 
-	# Next.js UI — all other routes
+	# Next.js UI — everything else
 	handle {
 		reverse_proxy growthbook:3000 {
 			import proxy-headers
