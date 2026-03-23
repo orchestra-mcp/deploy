@@ -347,11 +347,10 @@ api.orchestra-mcp.dev {
 	}
 }
 
-# ─── 10. GrowthBook UI (Feature Flags + A/B Testing dashboard) ──────────────
-# GrowthBook architecture: port 3000 = Next.js UI, port 3100 = Express API.
-# UI lives here; all API calls go to flags-api.orchestra-mcp.dev (API_HOST).
-# Caddy rewrites Set-Cookie domain to .orchestra-mcp.dev so cookies from
-# flags-api are readable by flags (shared parent domain).
+# ─── 10. GrowthBook (Feature Flags + A/B Testing) ────────────────────────────
+# GrowthBook: port 3000 = Next.js UI, port 3100 = Express API backend.
+# APP_ORIGIN = API_HOST = https://flags.orchestra-mcp.dev (same origin).
+# Caddy splits: /auth/* and /api/* → Express (3100); rest → Next.js (3000).
 
 flags.orchestra-mcp.dev {
 	import cloudflare-tls
@@ -359,8 +358,24 @@ flags.orchestra-mcp.dev {
 
 	encode gzip zstd
 
-	reverse_proxy growthbook:3000 {
-		import proxy-headers
+	# Express API backend — auth sessions + all API routes (admin + SDK)
+	handle /auth/* {
+		reverse_proxy growthbook:3100 {
+			import proxy-headers
+		}
+	}
+
+	handle /api/* {
+		reverse_proxy growthbook:3100 {
+			import proxy-headers
+		}
+	}
+
+	# Next.js UI — all other routes
+	handle {
+		reverse_proxy growthbook:3000 {
+			import proxy-headers
+		}
 	}
 
 	log {
@@ -372,37 +387,31 @@ flags.orchestra-mcp.dev {
 	}
 }
 
-# ─── 11. GrowthBook API (Express backend — admin UI + SDK calls) ─────────────
-# GrowthBook's Next.js frontend calls this for ALL API operations.
-# Cookies are scoped to .orchestra-mcp.dev so they're shared with flags.
+# ─── 11. GrowthBook SDK API (public alias for external SDK clients) ───────────
+# Mobile apps and browsers use this URL for feature flag evaluation.
 
 flags-api.orchestra-mcp.dev {
 	import cloudflare-tls
 
-	# CORS — browser requests from flags.orchestra-mcp.dev + SDK clients
 	@cors_preflight method OPTIONS
 	handle @cors_preflight {
-		header Access-Control-Allow-Origin "{header.Origin}"
-		header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET, POST, OPTIONS"
 		header Access-Control-Allow-Headers "Content-Type, Authorization"
-		header Access-Control-Allow-Credentials "true"
 		header Access-Control-Max-Age "86400"
 		respond "" 204
 	}
 
 	header {
-		Access-Control-Allow-Origin "{header.Origin}"
-		Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, POST, OPTIONS"
 		Access-Control-Allow-Headers "Content-Type, Authorization"
-		Access-Control-Allow-Credentials "true"
 		X-Content-Type-Options "nosniff"
 		-Server
 	}
 
 	reverse_proxy growthbook:3100 {
 		import proxy-headers
-		# Rewrite cookies to parent domain so flags. subdomain can read them
-		header_down Set-Cookie "Domain=flags-api.orchestra-mcp.dev" "Domain=.orchestra-mcp.dev"
 	}
 
 	log {
