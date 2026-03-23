@@ -17,93 +17,59 @@ CREATE EXTENSION IF NOT EXISTS pg_stat_statements;  -- analytics
 CREATE EXTENSION IF NOT EXISTS pg_net;  -- for webhooks (HTTP from DB)
 
 -- ── 2. Supabase Internal Roles ──
--- These roles are used by PostgREST, GoTrue, Storage, etc.
+-- The supabase/postgres Docker image creates these roles automatically
+-- with LOGIN and passwords derived from POSTGRES_PASSWORD.
+-- DO NOT create them here — if they exist before the image's init scripts
+-- run, those scripts will skip them and they won't get passwords set.
+--
+-- Roles created by the image:
+--   anon, authenticated, service_role, authenticator,
+--   supabase_auth_admin, supabase_storage_admin, supabase_functions_admin,
+--   supabase_admin, dashboard_user, pgbouncer, pgsodium_keyholder, etc.
+--
+-- We only ensure the role grants are correct (idempotent).
 
+-- Role grants (safe to re-run — GRANT is idempotent in PG)
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
-        CREATE ROLE anon NOLOGIN NOINHERIT;
-    END IF;
+    GRANT anon TO authenticator;
+    GRANT authenticated TO authenticator;
+    GRANT service_role TO authenticator;
+    GRANT supabase_auth_admin TO authenticator;
+    GRANT supabase_storage_admin TO authenticator;
+    GRANT supabase_functions_admin TO authenticator;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Role grants skipped (roles not yet created by image): %', SQLERRM;
 END $$;
 
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN
-        CREATE ROLE authenticated NOLOGIN NOINHERIT;
-    END IF;
+    GRANT anon TO postgres;
+    GRANT authenticated TO postgres;
+    GRANT service_role TO postgres;
+    GRANT supabase_admin TO postgres;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Role grants to postgres skipped: %', SQLERRM;
 END $$;
-
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN
-        CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
-    END IF;
-END $$;
-
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticator') THEN
-        CREATE ROLE authenticator NOINHERIT LOGIN;
-    END IF;
-END $$;
-
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_auth_admin') THEN
-        CREATE ROLE supabase_auth_admin NOLOGIN NOINHERIT CREATEROLE;
-    END IF;
-END $$;
-
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_storage_admin') THEN
-        CREATE ROLE supabase_storage_admin NOLOGIN NOINHERIT;
-    END IF;
-END $$;
-
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_functions_admin') THEN
-        CREATE ROLE supabase_functions_admin NOLOGIN NOINHERIT;
-    END IF;
-END $$;
-
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_admin') THEN
-        CREATE ROLE supabase_admin NOLOGIN NOINHERIT BYPASSRLS CREATEROLE CREATEDB;
-    END IF;
-END $$;
-
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'dashboard_user') THEN
-        CREATE ROLE dashboard_user NOLOGIN NOINHERIT CREATEROLE CREATEDB REPLICATION;
-    END IF;
-END $$;
-
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'pgbouncer') THEN
-        CREATE ROLE pgbouncer NOLOGIN NOINHERIT;
-    END IF;
-END $$;
-
--- Role grants
-GRANT anon TO authenticator;
-GRANT authenticated TO authenticator;
-GRANT service_role TO authenticator;
-GRANT supabase_auth_admin TO authenticator;
-GRANT supabase_storage_admin TO authenticator;
-GRANT supabase_functions_admin TO authenticator;
-
--- Grant roles to postgres (superuser)
-GRANT anon TO postgres;
-GRANT authenticated TO postgres;
-GRANT service_role TO postgres;
-GRANT supabase_admin TO postgres;
 
 -- ── 3. Schemas ──
-CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_auth_admin;
-CREATE SCHEMA IF NOT EXISTS storage AUTHORIZATION supabase_storage_admin;
+-- Use DO blocks to handle the case where schemas already exist with
+-- a different owner (the Supabase image creates them).
+DO $$ BEGIN CREATE SCHEMA IF NOT EXISTS auth; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER SCHEMA auth OWNER TO supabase_auth_admin; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN CREATE SCHEMA IF NOT EXISTS storage; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER SCHEMA storage OWNER TO supabase_storage_admin; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 CREATE SCHEMA IF NOT EXISTS _realtime;
 CREATE SCHEMA IF NOT EXISTS _analytics;
-CREATE SCHEMA IF NOT EXISTS supabase_functions AUTHORIZATION supabase_functions_admin;
+DO $$ BEGIN CREATE SCHEMA IF NOT EXISTS supabase_functions; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER SCHEMA supabase_functions OWNER TO supabase_functions_admin; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 CREATE SCHEMA IF NOT EXISTS graphql_public;
 
 -- Grant schema usage
-GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-GRANT USAGE ON SCHEMA extensions TO anon, authenticated, service_role;
+DO $$ BEGIN
+    GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+    GRANT USAGE ON SCHEMA extensions TO anon, authenticated, service_role;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Schema grants skipped: %', SQLERRM;
+END $$;
 
 -- ── 4. Default privileges ──
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
@@ -165,25 +131,41 @@ CREATE INDEX IF NOT EXISTS idx_supabase_functions_hooks_h_table_id_h_name
     ON supabase_functions.hooks(hook_table_id, hook_name);
 
 -- Grant webhook function access
-GRANT USAGE ON SCHEMA supabase_functions TO postgres, anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA supabase_functions TO postgres, anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA supabase_functions TO postgres, anon, authenticated, service_role;
+DO $$ BEGIN
+    GRANT USAGE ON SCHEMA supabase_functions TO postgres, anon, authenticated, service_role;
+    GRANT ALL ON ALL TABLES IN SCHEMA supabase_functions TO postgres, anon, authenticated, service_role;
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA supabase_functions TO postgres, anon, authenticated, service_role;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'supabase_functions grants skipped: %', SQLERRM;
+END $$;
 
 -- ── 8. Realtime schema ownership ──
-ALTER SCHEMA _realtime OWNER TO postgres;
-GRANT USAGE ON SCHEMA _realtime TO postgres;
+DO $$ BEGIN
+    ALTER SCHEMA _realtime OWNER TO postgres;
+    GRANT USAGE ON SCHEMA _realtime TO postgres;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
 -- ── 9. Analytics schema ownership ──
-ALTER SCHEMA _analytics OWNER TO postgres;
-GRANT USAGE ON SCHEMA _analytics TO postgres;
+DO $$ BEGIN
+    ALTER SCHEMA _analytics OWNER TO postgres;
+    GRANT USAGE ON SCHEMA _analytics TO postgres;
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
 -- ── 10. Storage schema permissions ──
-GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA storage TO anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA storage TO anon, authenticated, service_role;
+DO $$ BEGIN
+    GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
+    GRANT ALL ON ALL TABLES IN SCHEMA storage TO anon, authenticated, service_role;
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA storage TO anon, authenticated, service_role;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'storage grants skipped: %', SQLERRM;
+END $$;
 
 -- ── 11. Auth schema permissions ──
-GRANT USAGE ON SCHEMA auth TO supabase_auth_admin, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA auth TO supabase_auth_admin;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO supabase_auth_admin;
-GRANT ALL ON ALL ROUTINES IN SCHEMA auth TO supabase_auth_admin;
+DO $$ BEGIN
+    GRANT USAGE ON SCHEMA auth TO supabase_auth_admin, service_role;
+    GRANT ALL ON ALL TABLES IN SCHEMA auth TO supabase_auth_admin;
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO supabase_auth_admin;
+    GRANT ALL ON ALL ROUTINES IN SCHEMA auth TO supabase_auth_admin;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'auth grants skipped: %', SQLERRM;
+END $$;
