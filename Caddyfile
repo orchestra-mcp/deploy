@@ -97,32 +97,6 @@ db.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
 
-	# CORS preflight for all Supabase API routes (PostgREST, GoTrue, Realtime, Storage)
-	@cors_preflight {
-		method OPTIONS
-		path /rest/v1/* /auth/v1/* /realtime/v1/* /storage/v1/* /pg/* /mcp /functions/v1/*
-	}
-	handle @cors_preflight {
-		header Access-Control-Allow-Origin "https://orchestra-mcp.dev"
-		header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-		header Access-Control-Allow-Headers "Authorization, apikey, Content-Type, X-Client-Info, X-Supabase-Api-Version, Prefer, Range, Accept-Profile, Content-Profile"
-		header Access-Control-Allow-Credentials "true"
-		header Access-Control-Max-Age "86400"
-		respond "" 204
-	}
-
-	# CORS headers on all API responses
-	@api_routes {
-		path /rest/v1/* /auth/v1/* /realtime/v1/* /storage/v1/* /pg/* /mcp /functions/v1/*
-	}
-	header @api_routes {
-		Access-Control-Allow-Origin "https://orchestra-mcp.dev"
-		Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-		Access-Control-Allow-Headers "Authorization, apikey, Content-Type, X-Client-Info, X-Supabase-Api-Version, Prefer, Range, Accept-Profile, Content-Profile"
-		Access-Control-Allow-Credentials "true"
-		Access-Control-Expose-Headers "Content-Range, X-Total-Count"
-	}
-
 	# Allow favicon/manifest without auth (browsers always request these)
 	@favicon path /favicon/* /favicon.ico /favicon/manifest.json
 	handle @favicon {
@@ -393,9 +367,8 @@ flags.orchestra-mcp.dev {
 		}
 	}
 
-	# /api/* → Express backend, strip /api prefix so Express sees /user, /organization, etc.
+	# /api/* → Express backend (Express handles /api/user, /api/organization, etc. natively)
 	handle /api/* {
-		uri strip_prefix /api
 		reverse_proxy growthbook:3100 {
 			import proxy-headers
 		}
