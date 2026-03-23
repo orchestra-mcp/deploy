@@ -556,7 +556,9 @@ services:
     environment:
       MONGODB_URI: mongodb://growthbook-mongo:27017/growthbook
       APP_ORIGIN: https://flags.orchestra-mcp.dev
-      API_HOST: https://flags-api.orchestra-mcp.dev
+      # API_HOST must match APP_ORIGIN so session cookies work (same-origin).
+      # External SDKs use flags-api.orchestra-mcp.dev directly.
+      API_HOST: https://flags.orchestra-mcp.dev
       NODE_ENV: production
       # Secret key for JWT signing — generate a strong random value
       JWT_SECRET: ${GROWTHBOOK_JWT_SECRET}

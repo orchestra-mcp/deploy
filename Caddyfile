@@ -347,7 +347,10 @@ api.orchestra-mcp.dev {
 	}
 }
 
-# ─── 10. GrowthBook UI (Feature Flags + A/B Testing dashboard) ──────────────
+# ─── 10. GrowthBook (Feature Flags + A/B Testing) ────────────────────────────
+# GrowthBook architecture: port 3000 = Next.js UI, port 3100 = Express API.
+# Both UI and API MUST be on the same origin so session cookies work correctly.
+# Route /api/* → Express backend (3100), everything else → Next.js UI (3000).
 
 flags.orchestra-mcp.dev {
 	import cloudflare-tls
@@ -355,10 +358,19 @@ flags.orchestra-mcp.dev {
 
 	encode gzip zstd
 
-	# GrowthBook UI is served on port 3000 (Next.js); API is on port 3100
-	# The UI calls /api/* internally — all proxied to the same UI port
-	reverse_proxy growthbook:3000 {
-		import proxy-headers
+	# API routes → Express backend (port 3100)
+	# This includes auth, feature flags, SDK endpoints, admin API
+	handle /api/* {
+		reverse_proxy growthbook:3100 {
+			import proxy-headers
+		}
+	}
+
+	# All other routes → Next.js UI (port 3000)
+	handle {
+		reverse_proxy growthbook:3000 {
+			import proxy-headers
+		}
 	}
 
 	log {
@@ -370,35 +382,32 @@ flags.orchestra-mcp.dev {
 	}
 }
 
-# ─── 11. GrowthBook API (Express backend — UI + SDK calls) ──────────────────
-# GrowthBook architecture: port 3000 = Next.js UI, port 3100 = Express API.
-# The UI frontend makes ALL API calls to API_HOST (this subdomain).
-# CORS is required so browsers on flags.orchestra-mcp.dev can call this origin.
+# ─── 11. GrowthBook SDK API (public alias — same backend, SDK-friendly URL) ──
+# External SDKs (mobile, browser) use this URL for feature flag evaluation.
+# Points to the same Express API backend as flags.orchestra-mcp.dev/api/*.
 
 flags-api.orchestra-mcp.dev {
 	import cloudflare-tls
 
-	# CORS — required for GrowthBook UI (flags.orchestra-mcp.dev) + SDK clients
+	# CORS — SDKs call this from browsers and mobile apps
 	@cors_preflight method OPTIONS
 	handle @cors_preflight {
-		header Access-Control-Allow-Origin "{header.Origin}"
-		header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET, POST, OPTIONS"
 		header Access-Control-Allow-Headers "Content-Type, Authorization"
-		header Access-Control-Allow-Credentials "true"
 		header Access-Control-Max-Age "86400"
 		respond "" 204
 	}
 
 	header {
-		Access-Control-Allow-Origin "{header.Origin}"
-		Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, POST, OPTIONS"
 		Access-Control-Allow-Headers "Content-Type, Authorization"
-		Access-Control-Allow-Credentials "true"
 		X-Content-Type-Options "nosniff"
 		-Server
 	}
 
-	# Proxy all routes to GrowthBook API (port 3100)
+	# Proxy to GrowthBook API backend
 	reverse_proxy growthbook:3100 {
 		import proxy-headers
 	}
