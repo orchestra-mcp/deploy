@@ -164,8 +164,8 @@ services:
         paths:
           - /realtime/v1/
         protocols:
-          - ws
-          - wss
+          - http
+          - https
     plugins:
       - name: cors
       - name: key-auth
