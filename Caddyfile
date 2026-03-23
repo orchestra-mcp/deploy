@@ -206,7 +206,7 @@ edge.orchestra-mcp.dev {
 	import security-headers
 
 
-	reverse_proxy supabase-edge:8081 {
+	reverse_proxy supabase-edge:9999 {
 		import proxy-headers
 	}
 

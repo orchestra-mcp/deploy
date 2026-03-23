@@ -298,7 +298,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
       AUTH_JWT_SECRET: ${JWT_SECRET}
-      EDGE_RUNTIME_ENDPOINT: http://supabase-edge:8081
+      EDGE_RUNTIME_ENDPOINT: http://supabase-edge:9999
       # Studio auth credentials (basic auth at Caddy level + Studio internal)
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-supabase}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
