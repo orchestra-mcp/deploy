@@ -71,6 +71,23 @@ EOSQL
 
 echo "=== Passwords set ==="
 
+# ── Step 2b: Create _supabase database (for Analytics/Logflare + Supavisor) ──
+echo "=== Step 2b: Creating _supabase database ==="
+
+# _supabase is a separate database used by Logflare (analytics) and Supavisor.
+# createdb is idempotent-safe with the || true fallback.
+psql -v ON_ERROR_STOP=0 --username "$PG_USER" --dbname "$PG_DB" <<'EOSQL'
+SELECT 'CREATE DATABASE _supabase'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '_supabase')\gexec
+EOSQL
+
+# Create the _analytics schema inside _supabase (Logflare expects it)
+psql -v ON_ERROR_STOP=1 --username "$PG_USER" --dbname "_supabase" <<'EOSQL'
+CREATE SCHEMA IF NOT EXISTS _analytics;
+EOSQL
+
+echo "=== _supabase database ready ==="
+
 # ── Step 3: Create schemas and extensions ──
 echo "=== Step 3: Creating schemas and extensions ==="
 
@@ -92,7 +109,6 @@ GRANT USAGE ON SCHEMA storage TO postgres, anon, authenticated, service_role;
 
 -- Other schemas
 CREATE SCHEMA IF NOT EXISTS _realtime;
-CREATE SCHEMA IF NOT EXISTS _analytics;
 CREATE SCHEMA IF NOT EXISTS supabase_functions;
 CREATE SCHEMA IF NOT EXISTS graphql_public;
 
