@@ -192,9 +192,13 @@ COMMENT ON TABLE push_subscriptions IS 'Multi-platform push notification subscri
 -- 6. Enable audit tracking on new tables
 -- =============================================================================
 
-SELECT audit.enable_tracking('public.notification_preferences'::regclass);
-SELECT audit.enable_tracking('public.notification_templates'::regclass);
-SELECT audit.enable_tracking('public.notification_deliveries'::regclass);
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'supa_audit') THEN
+        PERFORM audit.enable_tracking('public.notification_preferences'::regclass);
+        PERFORM audit.enable_tracking('public.notification_templates'::regclass);
+        PERFORM audit.enable_tracking('public.notification_deliveries'::regclass);
+    END IF;
+END $$;
 
 -- =============================================================================
 -- 7. updated_at trigger for new tables

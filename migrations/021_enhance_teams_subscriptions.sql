@@ -280,11 +280,15 @@ COMMENT ON COLUMN team_invitations.status IS 'One of: pending, accepted, expired
 -- 8. Enable Audit Tracking on New Tables
 -- =============================================================================
 
-SELECT audit.enable_tracking('public.subscription_plans'::regclass);
-SELECT audit.enable_tracking('public.payment_events'::regclass);
-SELECT audit.enable_tracking('public.usage_records'::regclass);
-SELECT audit.enable_tracking('public.invoices'::regclass);
-SELECT audit.enable_tracking('public.team_invitations'::regclass);
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'supa_audit') THEN
+        PERFORM audit.enable_tracking('public.subscription_plans'::regclass);
+        PERFORM audit.enable_tracking('public.payment_events'::regclass);
+        PERFORM audit.enable_tracking('public.usage_records'::regclass);
+        PERFORM audit.enable_tracking('public.invoices'::regclass);
+        PERFORM audit.enable_tracking('public.team_invitations'::regclass);
+    END IF;
+END $$;
 
 -- =============================================================================
 -- 9. Updated-at Trigger Function (reuse if exists)

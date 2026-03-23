@@ -197,31 +197,38 @@ CREATE POLICY "notification_deliveries_select_own" ON notification_deliveries
 -- PART 4: SUPA_AUDIT TRACKING FOR ALL NEW TABLES
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Migration 020: CMS / i18n
-SELECT audit.enable_tracking('public.languages'::regclass);
-SELECT audit.enable_tracking('public.page_translations'::regclass);
-SELECT audit.enable_tracking('public.post_translations'::regclass);
-SELECT audit.enable_tracking('public.content_sections'::regclass);
-SELECT audit.enable_tracking('public.content_section_translations'::regclass);
-SELECT audit.enable_tracking('public.downloads'::regclass);
-SELECT audit.enable_tracking('public.solutions'::regclass);
-SELECT audit.enable_tracking('public.solution_translations'::regclass);
-SELECT audit.enable_tracking('public.doc_categories'::regclass);
-SELECT audit.enable_tracking('public.doc_category_translations'::regclass);
-SELECT audit.enable_tracking('public.doc_articles'::regclass);
-SELECT audit.enable_tracking('public.doc_article_translations'::regclass);
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'supa_audit') THEN
+        RAISE NOTICE 'supa_audit not installed — skipping audit tracking';
+        RETURN;
+    END IF;
 
--- Migration 021: Teams/Subscriptions
-SELECT audit.enable_tracking('public.subscription_plans'::regclass);
-SELECT audit.enable_tracking('public.payment_events'::regclass);
-SELECT audit.enable_tracking('public.usage_records'::regclass);
-SELECT audit.enable_tracking('public.invoices'::regclass);
-SELECT audit.enable_tracking('public.team_invitations'::regclass);
+    -- Migration 020: CMS / i18n
+    PERFORM audit.enable_tracking('public.languages'::regclass);
+    PERFORM audit.enable_tracking('public.page_translations'::regclass);
+    PERFORM audit.enable_tracking('public.post_translations'::regclass);
+    PERFORM audit.enable_tracking('public.content_sections'::regclass);
+    PERFORM audit.enable_tracking('public.content_section_translations'::regclass);
+    PERFORM audit.enable_tracking('public.downloads'::regclass);
+    PERFORM audit.enable_tracking('public.solutions'::regclass);
+    PERFORM audit.enable_tracking('public.solution_translations'::regclass);
+    PERFORM audit.enable_tracking('public.doc_categories'::regclass);
+    PERFORM audit.enable_tracking('public.doc_category_translations'::regclass);
+    PERFORM audit.enable_tracking('public.doc_articles'::regclass);
+    PERFORM audit.enable_tracking('public.doc_article_translations'::regclass);
 
--- Migration 022: Notifications
-SELECT audit.enable_tracking('public.notification_preferences'::regclass);
-SELECT audit.enable_tracking('public.notification_templates'::regclass);
-SELECT audit.enable_tracking('public.notification_deliveries'::regclass);
+    -- Migration 021: Teams/Subscriptions
+    PERFORM audit.enable_tracking('public.subscription_plans'::regclass);
+    PERFORM audit.enable_tracking('public.payment_events'::regclass);
+    PERFORM audit.enable_tracking('public.usage_records'::regclass);
+    PERFORM audit.enable_tracking('public.invoices'::regclass);
+    PERFORM audit.enable_tracking('public.team_invitations'::regclass);
+
+    -- Migration 022: Notifications
+    PERFORM audit.enable_tracking('public.notification_preferences'::regclass);
+    PERFORM audit.enable_tracking('public.notification_templates'::regclass);
+    PERFORM audit.enable_tracking('public.notification_deliveries'::regclass);
+END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- PART 5: UPDATE REALTIME PUBLICATION
