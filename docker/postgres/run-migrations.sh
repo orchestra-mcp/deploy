@@ -75,15 +75,18 @@ echo "=== Passwords set ==="
 echo "=== Step 2b: Creating _supabase database ==="
 
 # _supabase is a separate database used by Logflare (analytics) and Supavisor.
-# createdb is idempotent-safe with the || true fallback.
+# Must be owned by supabase_admin so Logflare can run Ecto migrations.
 psql -v ON_ERROR_STOP=0 --username "$PG_USER" --dbname "$PG_DB" <<'EOSQL'
-SELECT 'CREATE DATABASE _supabase'
+SELECT 'CREATE DATABASE _supabase OWNER ' || quote_ident(current_user)
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '_supabase')\gexec
 EOSQL
 
-# Create the _analytics schema inside _supabase (Logflare expects it)
-psql -v ON_ERROR_STOP=1 --username "$PG_USER" --dbname "_supabase" <<'EOSQL'
+# Create schemas inside _supabase with correct ownership (Logflare + Supavisor)
+psql -v ON_ERROR_STOP=1 --username "$PG_USER" --dbname "_supabase" <<EOSQL
 CREATE SCHEMA IF NOT EXISTS _analytics;
+ALTER SCHEMA _analytics OWNER TO $PG_USER;
+CREATE SCHEMA IF NOT EXISTS _supavisor;
+ALTER SCHEMA _supavisor OWNER TO $PG_USER;
 EOSQL
 
 echo "=== _supabase database ready ==="
