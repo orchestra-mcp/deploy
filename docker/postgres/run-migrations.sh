@@ -64,10 +64,23 @@ GRANT authenticated TO supabase_auth_admin;
 GRANT service_role TO supabase_auth_admin;
 
 -- Read-only user for MCP server (Studio serves MCP at /api/mcp)
+-- Needs USAGE + SELECT on all schemas so pg-meta can introspect the full catalog
 GRANT USAGE ON SCHEMA public TO supabase_read_only_user;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO supabase_read_only_user;
 GRANT USAGE ON SCHEMA auth TO supabase_read_only_user;
 GRANT SELECT ON ALL TABLES IN SCHEMA auth TO supabase_read_only_user;
+GRANT USAGE ON SCHEMA storage TO supabase_read_only_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA storage TO supabase_read_only_user;
+GRANT USAGE ON SCHEMA extensions TO supabase_read_only_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA extensions TO supabase_read_only_user;
+GRANT USAGE ON SCHEMA _realtime TO supabase_read_only_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA _realtime TO supabase_read_only_user;
+GRANT USAGE ON SCHEMA supabase_functions TO supabase_read_only_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA supabase_functions TO supabase_read_only_user;
+GRANT USAGE ON SCHEMA graphql_public TO supabase_read_only_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA graphql_public TO supabase_read_only_user;
+GRANT USAGE ON SCHEMA information_schema TO supabase_read_only_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA information_schema TO supabase_read_only_user;
 
 EOSQL
 
@@ -163,6 +176,14 @@ GRANT ALL ON SCHEMA storage TO dashboard_user;
 -- supabase_functions grants
 GRANT USAGE ON SCHEMA supabase_functions TO postgres, anon, authenticated, service_role;
 
+-- Grant cron schema to read-only user if pg_cron is installed
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'cron') THEN
+        EXECUTE 'GRANT USAGE ON SCHEMA cron TO supabase_read_only_user';
+        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA cron TO supabase_read_only_user';
+    END IF;
+END $$;
+
 -- Realtime publication
 DO $$ BEGIN CREATE PUBLICATION supabase_realtime; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
@@ -198,10 +219,20 @@ fi
 
 echo "=== Step 4: Running Orchestra migrations ==="
 
+# Build connection strings for FDW migrations
+CH_USER="${CLICKHOUSE_USER:-orchestra}"
+CH_PASS="${CLICKHOUSE_PASSWORD:-}"
+CH_CONN="tcp://${CH_USER}:${CH_PASS}@clickhouse:9000/orchestra_analytics"
+
+REDIS_PASS="${REDIS_PASSWORD:-}"
+
 for f in "$MIGRATIONS_DIR"/*.sql; do
     [ -f "$f" ] || continue
     echo "  → $(basename "$f")"
-    run_sql -f "$f"
+    run_sql \
+        -v ch_conn_string="${CH_CONN}" \
+        -v redis_password="${REDIS_PASS}" \
+        -f "$f"
 done
 
 echo "=== Orchestra migrations complete ==="

@@ -36,6 +36,10 @@ volumes:
     driver: local
   clickhouse_logs:
     driver: local
+  redis_data:
+    driver: local
+  growthbook_data:
+    driver: local
 
 # ─── Services ────────────────────────────────────────────────────────────────
 
@@ -54,6 +58,9 @@ services:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-orchestra}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d/migrations:ro
@@ -81,7 +88,7 @@ services:
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB:-postgres}
       GOTRUE_SITE_URL: https://orchestra-mcp.dev
-      GOTRUE_URI_ALLOW_LIST: ${GOTRUE_URI_ALLOW_LIST:-}
+      GOTRUE_URI_ALLOW_LIST: ${GOTRUE_URI_ALLOW_LIST:-https://orchestra-mcp.dev/auth/callback}
       GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
@@ -494,6 +501,80 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ── Redis (Cache + Sessions + Feature Flag eval cache) ───────────────────
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: orchestra-redis
+    restart: unless-stopped
+    networks: [orchestra]
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── GrowthBook (Feature Flags + A/B Testing) ──────────────────────────────
+  # Docs: https://docs.growthbook.io/self-host/docker
+  # Uses MongoDB for experiment/flag config storage.
+  # ClickHouse is configured as a datasource from the GrowthBook UI.
+
+  growthbook-mongo:
+    image: mongo:7.0
+    container_name: orchestra-growthbook-mongo
+    restart: unless-stopped
+    networks: [orchestra]
+    volumes:
+      - growthbook_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  growthbook:
+    image: growthbook/growthbook:latest
+    container_name: orchestra-growthbook
+    restart: unless-stopped
+    networks: [orchestra]
+    depends_on:
+      growthbook-mongo:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment:
+      MONGODB_URI: mongodb://growthbook-mongo:27017/growthbook
+      APP_ORIGIN: https://flags.orchestra-mcp.dev
+      API_HOST: https://flags-api.orchestra-mcp.dev
+      NODE_ENV: production
+      # Secret key for JWT signing — generate a strong random value
+      JWT_SECRET: ${GROWTHBOOK_JWT_SECRET}
+      # Encryption key for sensitive data at rest
+      ENCRYPTION_KEY: ${GROWTHBOOK_ENCRYPTION_KEY}
+      # Email (optional — for invite links)
+      EMAIL_ENABLED: ${GROWTHBOOK_EMAIL_ENABLED:-false}
+      EMAIL_HOST: ${SMTP_HOST:-}
+      EMAIL_PORT: ${SMTP_PORT:-587}
+      EMAIL_HOST_USER: ${SMTP_USER:-}
+      EMAIL_HOST_PASSWORD: ${SMTP_PASS:-}
+      EMAIL_FROM: ${SMTP_ADMIN_EMAIL:-noreply@orchestra-mcp.dev}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3100/healthcheck', r => process.exit(r.statusCode === 200 ? 0 : 1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # ── Orchestra: Gateway (Unified Go API + MCP) ───────────────────────────
   # Source: apps/gateway/ — handles both api. and mcp. subdomains.

@@ -109,6 +109,9 @@ create_env_interactive() {
     prompt_password "Vault Encryption Key" VAULT_ENC_KEY 16
     prompt_password "Realtime DB Encryption Key" REALTIME_DB_ENC_KEY 16
     prompt_password "ClickHouse Password" CLICKHOUSE_PASSWORD 16
+    prompt_password "Redis Password" REDIS_PASSWORD 24
+    prompt_password "GrowthBook JWT Secret" GROWTHBOOK_JWT_SECRET 32
+    prompt_password "GrowthBook Encryption Key" GROWTHBOOK_ENCRYPTION_KEY 32
     echo ""
 
     # ── Supabase Studio ───────────────────────────────────────────────
@@ -230,6 +233,9 @@ console.log(header+'.'+payload+'.'+sig);
     VAULT_ENC_KEY=$(escape_dollars "$VAULT_ENC_KEY")
     REALTIME_DB_ENC_KEY=$(escape_dollars "$REALTIME_DB_ENC_KEY")
     CLICKHOUSE_PASSWORD=$(escape_dollars "$CLICKHOUSE_PASSWORD")
+    REDIS_PASSWORD=$(escape_dollars "$REDIS_PASSWORD")
+    GROWTHBOOK_JWT_SECRET=$(escape_dollars "$GROWTHBOOK_JWT_SECRET")
+    GROWTHBOOK_ENCRYPTION_KEY=$(escape_dollars "$GROWTHBOOK_ENCRYPTION_KEY")
     DASHBOARD_PASSWORD=$(escape_dollars "$DASHBOARD_PASSWORD")
     studio_hash=$(escape_dollars "$studio_hash")
     ch_admin_hash=$(escape_dollars "$ch_admin_hash")
@@ -293,6 +299,14 @@ CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
 CLICKHOUSE_ADMIN_USER=admin
 CLICKHOUSE_ADMIN_HASH=${ch_admin_hash}
 
+# ─── Redis ───────────────────────────────────────────────────────
+REDIS_PASSWORD=${REDIS_PASSWORD}
+
+# ─── GrowthBook ──────────────────────────────────────────────────
+GROWTHBOOK_JWT_SECRET=${GROWTHBOOK_JWT_SECRET}
+GROWTHBOOK_ENCRYPTION_KEY=${GROWTHBOOK_ENCRYPTION_KEY}
+GROWTHBOOK_EMAIL_ENABLED=false
+
 # ─── Supavisor ───────────────────────────────────────────────────
 SECRET_KEY_BASE=${SECRET_KEY_BASE}
 VAULT_ENC_KEY=${VAULT_ENC_KEY}
@@ -328,6 +342,57 @@ if [ ! -f .env ]; then
     create_env_interactive
 fi
 
+# ── Post-deploy: ClickHouse FDW setup ────────────────────────────────────
+# Runs migration 029 against a running Postgres container.
+# Safe to re-run: all statements use IF NOT EXISTS / DO $$ EXCEPTION.
+setup_clickhouse_fdw() {
+    if [ ! -f migrations/029_clickhouse_fdw.sql ]; then
+        return 0
+    fi
+
+    # Source .env to get credentials (Docker Compose $$ escaping → single $)
+    local ch_user ch_pass
+    ch_user=$(grep '^CLICKHOUSE_USER=' .env | cut -d= -f2- | sed 's/\$\$/$/g')
+    ch_pass=$(grep '^CLICKHOUSE_PASSWORD=' .env | cut -d= -f2- | sed 's/\$\$/$/g')
+    ch_user="${ch_user:-orchestra}"
+
+    if [ -z "$ch_pass" ]; then
+        warn "CLICKHOUSE_PASSWORD not set in .env — skipping ClickHouse FDW setup."
+        return 0
+    fi
+
+    local conn_string="tcp://${ch_user}:${ch_pass}@clickhouse:9000/orchestra_analytics"
+
+    log "Setting up ClickHouse FDW (foreign tables)..."
+    docker compose exec -T supabase-db psql -U postgres -v ch_conn_string="${conn_string}" \
+        -f /docker-entrypoint-initdb.d/migrations/029_clickhouse_fdw.sql 2>&1 \
+        | grep -E '(NOTICE|ERROR|CREATE|GRANT|DROP|ALTER)' || true
+    log "ClickHouse FDW ready."
+}
+
+# ── Post-deploy: Redis FDW setup ─────────────────────────────────────────
+setup_redis_fdw() {
+    if [ ! -f migrations/030_redis_fdw.sql ]; then
+        return 0
+    fi
+
+    local redis_pass
+    redis_pass=$(grep '^REDIS_PASSWORD=' .env | cut -d= -f2- | sed 's/\$\$/$/g')
+
+    if [ -z "$redis_pass" ]; then
+        warn "REDIS_PASSWORD not set in .env — skipping Redis FDW setup."
+        return 0
+    fi
+
+    log "Setting up Redis FDW (foreign tables)..."
+    docker compose exec -T supabase-db psql -U postgres \
+        -v redis_password="${redis_pass}" \
+        -v ch_conn_string="placeholder" \
+        -f /docker-entrypoint-initdb.d/migrations/030_redis_fdw.sql 2>&1 \
+        | grep -E '(NOTICE|ERROR|CREATE|GRANT|DROP|ALTER)' || true
+    log "Redis FDW ready."
+}
+
 case "${1:-}" in
     --pull-only)
         log "Pulling latest images..."
@@ -360,6 +425,21 @@ case "${1:-}" in
         log "Waiting for health checks..."
         sleep 5
 
+        # Wait for Postgres to be ready before running FDW setup
+        log "Waiting for Postgres to be ready..."
+        local retries=0
+        until docker compose exec -T supabase-db pg_isready -U postgres >/dev/null 2>&1; do
+            retries=$((retries + 1))
+            if [ "$retries" -ge 30 ]; then
+                warn "Postgres not ready after 30s — skipping ClickHouse FDW setup."
+                break
+            fi
+            sleep 1
+        done
+
+        setup_clickhouse_fdw
+        setup_redis_fdw
+
         log "Service status:"
         docker compose ps
 
@@ -374,6 +454,8 @@ case "${1:-}" in
         log "  MCP:       https://mcp.orchestra-mcp.dev"
         log "  Gateway:   https://api.orchestra-mcp.dev"
         log "  Frontend:  https://orchestra-mcp.dev"
-        log "  Analytics: https://analytics.orchestra-mcp.dev"
+        log "  Analytics: https://analytics.orchestra-mcp.dev/play"
+        log "  Flags UI:  https://flags.orchestra-mcp.dev"
+        log "  Flags API: https://flags-api.orchestra-mcp.dev"
         ;;
 esac

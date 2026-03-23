@@ -347,17 +347,78 @@ api.orchestra-mcp.dev {
 	}
 }
 
-# ─── 10. ClickHouse Analytics (Admin-Only, Protected) ────────────────────────
+# ─── 10. GrowthBook UI (Feature Flags + A/B Testing dashboard) ──────────────
+
+flags.orchestra-mcp.dev {
+	import cloudflare-tls
+	import security-headers
+
+	encode gzip zstd
+
+	# GrowthBook UI is served on port 3000 (Next.js); API is on port 3100
+	# The UI calls /api/* internally — all proxied to the same UI port
+	reverse_proxy growthbook:3000 {
+		import proxy-headers
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-flags.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# ─── 11. GrowthBook API (Express backend — UI + SDK calls) ──────────────────
+# GrowthBook architecture: port 3000 = Next.js UI, port 3100 = Express API.
+# The UI frontend makes ALL API calls to API_HOST (this subdomain).
+# CORS is required so browsers on flags.orchestra-mcp.dev can call this origin.
+
+flags-api.orchestra-mcp.dev {
+	import cloudflare-tls
+
+	# CORS — required for GrowthBook UI (flags.orchestra-mcp.dev) + SDK clients
+	@cors_preflight method OPTIONS
+	handle @cors_preflight {
+		header Access-Control-Allow-Origin "{header.Origin}"
+		header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+		header Access-Control-Allow-Headers "Content-Type, Authorization"
+		header Access-Control-Allow-Credentials "true"
+		header Access-Control-Max-Age "86400"
+		respond "" 204
+	}
+
+	header {
+		Access-Control-Allow-Origin "{header.Origin}"
+		Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type, Authorization"
+		Access-Control-Allow-Credentials "true"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	# Proxy all routes to GrowthBook API (port 3100)
+	reverse_proxy growthbook:3100 {
+		import proxy-headers
+	}
+
+	log {
+		output file /var/log/caddy/orchestra-flags-api.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# ─── 11. ClickHouse Analytics (Admin-Only, Protected) ────────────────────────
 
 analytics.orchestra-mcp.dev {
 	import cloudflare-tls
 	import security-headers
 
-	# Basic auth protection — only admins should access ClickHouse HTTP interface
-	basicauth {
-		{env.CLICKHOUSE_ADMIN_USER} {env.CLICKHOUSE_ADMIN_HASH}
-	}
-
+	# ClickHouse handles authentication via its own user/password system
 	reverse_proxy clickhouse:8123 {
 		import proxy-headers
 	}
