@@ -459,7 +459,7 @@ services:
       LOGFLARE_PUBLIC_ACCESS_TOKEN: ${LOGFLARE_API_KEY}
     command: ["--config", "/etc/vector/vector.yml"]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9001/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://0.0.0.0:9001/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
