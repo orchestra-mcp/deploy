@@ -556,7 +556,10 @@ services:
     environment:
       MONGODB_URI: mongodb://growthbook-mongo:27017/growthbook
       APP_ORIGIN: https://flags.orchestra-mcp.dev
-      API_HOST: https://flags-api.orchestra-mcp.dev
+      # API_HOST: public URL shown to browsers and used by Next.js SSR.
+      # Must be reachable from inside the container for SSR calls.
+      # Using internal Docker hostname avoids the public internet + TLS for SSR.
+      API_HOST: http://localhost:3100
       NODE_ENV: production
       # Secret key for JWT signing — generate a strong random value
       JWT_SECRET: ${GROWTHBOOK_JWT_SECRET}
