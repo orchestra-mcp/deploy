@@ -221,11 +221,12 @@ services:
         condition: service_healthy
     environment:
       PG_META_PORT: 8080
-      PG_META_DB_HOST: supabase-db
+      PG_META_DB_HOST: db
       PG_META_DB_PORT: 5432
       PG_META_DB_NAME: ${POSTGRES_DB:-postgres}
       PG_META_DB_USER: supabase_admin
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) })"]
       interval: 10s
@@ -290,6 +291,14 @@ services:
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
       DEFAULT_ORGANIZATION_NAME: Orchestra
       DEFAULT_PROJECT_NAME: orchestra-mcp
+      # Database connection details (Studio encrypts password with CRYPTO_KEY for meta)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      EDGE_RUNTIME_ENDPOINT: http://supabase-edge:8081
       # Studio auth credentials (basic auth at Caddy level + Studio internal)
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-supabase}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
@@ -501,6 +510,8 @@ services:
         condition: service_started
     environment:
       CF_API_TOKEN: ${CF_API_TOKEN}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-orchestra}
+      DASHBOARD_PASSWORD_HASH: ${DASHBOARD_PASSWORD_HASH}
       CLICKHOUSE_ADMIN_USER: ${CLICKHOUSE_ADMIN_USER:-admin}
       CLICKHOUSE_ADMIN_HASH: ${CLICKHOUSE_ADMIN_HASH}
     healthcheck:
